@@ -245,8 +245,10 @@ export function matchOrInsertSemicolon(parser: ParserState, context: Context, sp
     (parser.token & Token.IsAutoSemicolon) !== Token.IsAutoSemicolon &&
     !specDeviation
   ) {
+    
     report(parser, Errors.UnexpectedToken, KeywordDescTable[parser.token & Token.Type]);
   }
+
   consumeOpt(parser, context, Token.Semicolon);
 }
 

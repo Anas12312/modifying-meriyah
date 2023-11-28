@@ -46,6 +46,7 @@ import {
   isValidIdentifier,
   classifyIdentifier
 } from './common.mjs';
+import { Console } from 'console';
 
 /**
  * Create a new parser instance
@@ -739,7 +740,7 @@ export function parseExpressionOrLabelledStatement(
    *   ('++' | '--')? LeftHandSideExpression
    *
    */
-
+  
   expr = parseMemberOrUpdateExpression(parser, context, expr, 0, 0, start, line, column);
 
   /** AssignmentExpression :
@@ -1719,7 +1720,7 @@ export function parseCatchBlock(
   line: number,
   column: number
 ): ESTree.CatchClause {
-  let param: ESTree.BindingPattern | ESTree.Identifier | ESTree.MetaVariable | null = null;
+  let param: ESTree.BindingPattern | ESTree.Identifier | ESTree.MetaVariable | ESTree.General | null = null;
   let additionalScope: ScopeState | undefined = scope;
 
   if (consumeOpt(parser, context, Token.LeftParen)) {
@@ -1874,13 +1875,11 @@ export function parseLetIdentOrVarDeclarationStatement(
 ): ESTree.VariableDeclaration | ESTree.LabeledStatement | ESTree.ExpressionStatement {
   const { token, tokenValue } = parser;
   let expr: ESTree.Identifier | ESTree.MetaVariable | ESTree.Expression = parseIdentifier(parser, context, 0);
-
-  if (parser.token & (Token.IsIdentifier | Token.IsPatternStart)) {
-    console.log("ana dakhlt")
+  
+  if (parser.token & (Token.IsIdentifier | Token.IsPatternStart | Token.General)) {
     /* VariableDeclarations ::
      *  ('let') (Identifier ('=' AssignmentExpression)?)+[',']
      */
-
     const declarations = parseVariableDeclarationList(parser, context, scope, BindingKind.Let, Origin.None);
 
     matchOrInsertSemicolon(parser, context | Context.AllowRegExp);
@@ -2106,7 +2105,6 @@ function parseVariableDeclaration(
   let init: ESTree.Expression | ESTree.BindingPattern | ESTree.Identifier | ESTree.MetaVariable | null = null;
 
   const id = parseBindingPattern(parser, context, scope, kind, origin, tokenPos, linePos, colPos);
-
   if (parser.token === Token.Assign) {
     nextToken(parser, context | Context.AllowRegExp);
     init = parseExpression(parser, context, 1, 0, 0, parser.tokenPos, parser.linePos, parser.colPos);
@@ -4098,7 +4096,7 @@ export function parseOptionalChain(
  * @param context Context masks
  */
 export function parsePropertyOrPrivatePropertyName(parser: ParserState, context: Context): any {
-  if ((parser.token & (Token.IsIdentifier | Token.Keyword)) === 0 && parser.token !== Token.PrivateField) {
+  if ((parser.token & (Token.IsIdentifier | Token.Keyword )) === 0 && parser.token !== Token.PrivateField) {
     report(parser, Errors.InvalidDotProperty);
   }
 
@@ -5867,8 +5865,16 @@ export function parseObjectLiteralOrPattern(
       let key: ESTree.Expression | null = null;
       let value;
       const t = parser.token;
-      if (parser.token & (Token.IsIdentifier | Token.Keyword) || parser.token === Token.EscapedReserved) {
-        key = parseIdentifier(parser, context, 0);
+      if (parser.token & (Token.IsIdentifier | Token.Keyword | Token.General) || parser.token === Token.EscapedReserved) {
+        if(parser.token == Token.General)
+        {
+           //s7s
+          key = parseGeneral(parser, context, parser.tokenPos, parser.linePos, parser.colPos)
+        }else{
+       
+          key = parseIdentifier(parser, context, 0);
+        }
+        
 
         if (parser.token === Token.Comma || parser.token === Token.RightBrace || parser.token === Token.Assign) {
           state |= PropertyKind.Shorthand;
@@ -6553,9 +6559,10 @@ export function parseObjectLiteralOrPattern(
           report(parser, Errors.InvalidObjLitKeyStar);
         }
       } 
-      else if(parser.token === Token.General){
-        key=parseGeneral(parser, context, parser.tokenPos, parser.linePos, parser.colPos)
-      }
+      //toto
+      // else if(parser.token === Token.General){
+      //   key = parseGeneral(parser, context, parser.tokenPos, parser.linePos, parser.colPos)
+      // }
       else {
         report(parser, Errors.UnexpectedToken, KeywordDescTable[token & Token.Type]);
       }
@@ -6660,6 +6667,8 @@ export function parseMethodFormals(
     let left = null;
     const { tokenPos, linePos, colPos } = parser;
 
+   
+
     if (parser.token & Token.IsIdentifier) {
       if ((context & Context.Strict) === 0) {
         if ((parser.token & Token.FutureReserved) === Token.FutureReserved) {
@@ -6681,6 +6690,8 @@ export function parseMethodFormals(
         linePos,
         colPos
       );
+    } else if(parser.token === Token.General){
+        left = parseGeneral(parser, context, parser.tokenPos, parser.linePos, parser.colPos);
     } else {
       if (parser.token === Token.LeftBrace) {
         left = parseObjectLiteralOrPattern(
@@ -6726,6 +6737,7 @@ export function parseMethodFormals(
           colPos
         );
       }
+      
 
       isSimpleParameterList = 1;
 
@@ -6746,6 +6758,7 @@ export function parseMethodFormals(
         right
       });
     }
+    
 
     setterArgs++;
 
@@ -6756,7 +6769,12 @@ export function parseMethodFormals(
       // allow the trailing comma
       break;
     }
+    
+
+
+
   }
+
 
   if (kind & PropertyKind.Setter && setterArgs !== 1) {
     report(parser, Errors.AccessorWrongArgs, 'Setter', 'one', '');
@@ -7372,7 +7390,9 @@ export function parseFormalParametersOrFormalList(
           linePos,
           colPos
         );
-      } else {
+      } else if(parser.token === Token.General) {
+        left = parseGeneral(parser, context, parser.tokenPos, parser.linePos, parser.colPos)
+      } else{
         report(parser, Errors.UnexpectedToken, KeywordDescTable[parser.token & Token.Type]);
       }
 
@@ -8611,6 +8631,10 @@ export function parseBindingPattern(
 
   if (parser.token & Token.IsIdentifier)
     return parseAndClassifyIdentifier(parser, context, scope, type, origin, start, line, column);
+  else if(parser.token == Token.General){
+    return parseGeneral(parser, context, parser.tokenPos, parser.linePos, parser.colPos);
+
+  }
 
   if ((parser.token & Token.IsPatternStart) !== Token.IsPatternStart)
     report(parser, Errors.UnexpectedToken, KeywordDescTable[parser.token & Token.Type]);

@@ -137,7 +137,7 @@ export type Node =
   | WhileStatement
   | WithStatement
   | YieldExpression
-export type BindingPattern = ArrayPattern | ObjectPattern | Identifier | MetaVariable;
+export type BindingPattern = ArrayPattern | ObjectPattern | Identifier | MetaVariable | General;
 export type ClassElement = FunctionExpression | MethodDefinition;
 export type DeclarationStatement =
   | ClassDeclaration
